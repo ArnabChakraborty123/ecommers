@@ -1,39 +1,65 @@
-'use client'
+import Link from "next/link";
+import Image from "next/image";
+import { auth, signOut, signIn } from "@/auth";
+import { BadgePlus, LogOut } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import Link from 'next/link'
-import { useCart } from '../context/CartContext'
-
-const Header = () => {
-  const { cart } = useCart()
-
-  const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0)
+const Navbar = async () => {
+  const session = await auth();
 
   return (
-    <header className="bg-gray-900 text-white p-4">
-      <nav className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold">Dark E-commerce</Link>
-        
-        <ul className="flex space-x-4">
-          <li><Link href="/" className="hover:text-gray-300">Home</Link></li>
-          <li>
-            <Link href="/cart" className="hover:text-gray-300 relative">
-              Cart
-              {cartItemsCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {cartItemsCount}
-                </span>
-              )}
-            </Link>
-          </li>
-          <li>
-            <Link href="/login" className="hover:text-gray-300 bg-blue-600 text-white py-1 px-3 rounded-md">
-              Login
-            </Link>
-          </li>
-        </ul>
+    <header className="px-5 py-3 bg-white shadow-sm font-work-sans">
+      <nav className="flex justify-between items-center">
+        <Link href="/">
+          <Image src="/logo.png" alt="logo" width={144} height={30} />
+        </Link>
+
+        <div className="flex items-center gap-5 text-black">
+          {session && session?.user ? (
+            <>
+              <Link href="/startup/create">
+                <span className="max-sm:hidden">Create</span>
+                <BadgePlus className="size-6 sm:hidden" />
+              </Link>
+
+              <form
+                action={async () => {
+                  "use server";
+
+                  await signOut({ redirectTo: "/" });
+                }}
+              >
+                <button type="submit">
+                  <span className="max-sm:hidden">Logout</span>
+                  <LogOut className="size-6 sm:hidden text-red-500" />
+                </button>
+              </form>
+
+              <Link href={`/user/${session?.id}`}>
+                <Avatar className="size-10">
+                  <AvatarImage
+                    src={session?.user?.image || ""}
+                    alt={session?.user?.name || ""}
+                  />
+                  <AvatarFallback>AV</AvatarFallback>
+                </Avatar>
+              </Link>
+            </>
+          ) : (
+            <form
+              action={async () => {
+                "use server";
+
+                await signIn("google");
+              }}
+            >
+              <button type="submit">Login</button>
+            </form>
+          )}
+        </div>
       </nav>
     </header>
-  )
-}
+  );
+};
 
-export default Header
+export default Navbar;

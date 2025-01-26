@@ -1,18 +1,19 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { useCart } from "../../context/CartContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { CreditCard, Truck, RefreshCcw, DollarSign, ChevronLeft, ChevronRight } from "lucide-react"
+import { CreditCard, Truck, RefreshCcw, DollarSign, ChevronLeft, ChevronRight, Check } from "lucide-react"
 import { type ItemData, ApiResponse } from "../../types/item"
 import { getItemById } from "../../data/items"
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
+import useEmblaCarousel from "embla-carousel-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 const ServiceFeature = ({ icon, text }: { icon: React.ReactNode; text: string }) => (
   <TooltipProvider>
@@ -35,6 +36,28 @@ export default function ItemPage({ params }: { params: { id: string } }) {
   const [selectedColor, setSelectedColor] = useState<string>("")
   const [selectedPackSize, setSelectedPackSize] = useState<string>("")
   const [sizeQuantities, setSizeQuantities] = useState<{ [key: string]: number }>({})
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false })
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [scrollSnaps, setScrollSnaps] = useState<number[]>([])
+  const [openColor, setOpenColor] = useState(false)
+  const [openPackSize, setOpenPackSize] = useState(false)
+
+  const scrollTo = useCallback((index: number) => emblaApi && emblaApi.scrollTo(index), [emblaApi])
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return
+    setSelectedIndex(emblaApi.selectedScrollSnap())
+  }, [emblaApi, setSelectedIndex])
+
+  useEffect(() => {
+    if (!emblaApi) return
+    onSelect()
+    setScrollSnaps(emblaApi.scrollSnapList())
+    emblaApi.on("select", onSelect)
+    return () => {
+      emblaApi.off("select", onSelect)
+    }
+  }, [emblaApi, onSelect])
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -53,6 +76,7 @@ export default function ItemPage({ params }: { params: { id: string } }) {
         setSizeQuantities(initialSizeQuantities)
       } catch (error) {
         console.error("Error fetching item:", error)
+        
       }
     }
 
@@ -81,6 +105,21 @@ export default function ItemPage({ params }: { params: { id: string } }) {
     }
   }
 
+  const offers = [
+    {
+      title: "EMI & Payment Info",
+      description: ["EMI starting from $20/month", "No Cost EMI available on select credit cards"],
+    },
+    {
+      title: "Cashback Offer",
+      description: ["Get 5% cashback on ACME Bank Credit Cards"],
+    },
+    {
+      title: "Business Offer",
+      description: ["Special pricing and GST invoice for business purchases"],
+    },
+  ]
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -101,36 +140,88 @@ export default function ItemPage({ params }: { params: { id: string } }) {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <h2 className="text-sm font-semibold mb-2">Color:</h2>
-              <Select value={selectedColor} onValueChange={setSelectedColor}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Color" />
-                </SelectTrigger>
-                <SelectContent>
-                  {item.color.map((c) => (
-                    <SelectItem key={c.name} value={c.name}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm mt-2">Selected: {selectedColor}</p>
+              <Popover open={openColor} onOpenChange={setOpenColor}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openColor}
+                    className="w-full justify-between"
+                  >
+                    {selectedColor ? item.color.find((color) => color.name === selectedColor)?.name : "Select color..."}
+                    <ChevronLeft className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search color..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>No color found.</CommandEmpty>
+                      <CommandGroup>
+                        {item.color.map((color) => (
+                          <CommandItem
+                            key={color.name}
+                            value={color.name}
+                            onSelect={(currentValue) => {
+                              setSelectedColor(currentValue === selectedColor ? "" : currentValue)
+                              setOpenColor(false)
+                            }}
+                          >
+                            {color.name}
+                            <Check
+                              className={`ml-auto h-4 w-4 ${selectedColor === color.name ? "opacity-100" : "opacity-0"}`}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div>
               <h2 className="text-sm font-semibold mb-2">Pack Size:</h2>
-              <Select value={selectedPackSize} onValueChange={setSelectedPackSize}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pack Size" />
-                </SelectTrigger>
-                <SelectContent>
-                  {item.packsize.map((p) => (
-                    <SelectItem key={p.name} value={p.name}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm mt-2">Selected: {selectedPackSize}</p>
+              <Popover open={openPackSize} onOpenChange={setOpenPackSize}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openPackSize}
+                    className="w-full justify-between"
+                  >
+                    {selectedPackSize
+                      ? item.packsize.find((size) => size.name === selectedPackSize)?.name
+                      : "Select pack size..."}
+                    <ChevronLeft className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search pack size..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>No pack size found.</CommandEmpty>
+                      <CommandGroup>
+                        {item.packsize.map((size) => (
+                          <CommandItem
+                            key={size.name}
+                            value={size.name}
+                            onSelect={(currentValue) => {
+                              setSelectedPackSize(currentValue === selectedPackSize ? "" : currentValue)
+                              setOpenPackSize(false)
+                            }}
+                          >
+                            {size.name}
+                            <Check
+                              className={`ml-auto h-4 w-4 ${selectedPackSize === size.name ? "opacity-100" : "opacity-0"}`}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -169,41 +260,53 @@ export default function ItemPage({ params }: { params: { id: string } }) {
           </Button>
 
           <div className="space-y-4">
-            <Carousel className="w-full">
-              <CarouselContent>
-                <CarouselItem>
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4 h-[120px] flex flex-col justify-center">
-                      <h3 className="text-lg font-semibold mb-2">EMI & Payment Info</h3>
-                      <p className="text-sm text-gray-400">EMI starting from $20/month</p>
-                      <p className="text-sm text-gray-400">No Cost EMI available on select credit cards</p>
-                    </CardContent>
-                  </Card>
-                </CarouselItem>
-                <CarouselItem>
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4 h-[120px] flex flex-col justify-center">
-                      <h3 className="text-lg font-semibold mb-2">Cashback Offer</h3>
-                      <p className="text-sm text-gray-400">Get 5% cashback on ACME Bank Credit Cards</p>
-                    </CardContent>
-                  </Card>
-                </CarouselItem>
-                <CarouselItem>
-                  <Card className="bg-gray-800 border-gray-700">
-                    <CardContent className="p-4 h-[120px] flex flex-col justify-center">
-                      <h3 className="text-lg font-semibold mb-2">Business Offer</h3>
-                      <p className="text-sm text-gray-400">Special pricing and GST invoice for business purchases</p>
-                    </CardContent>
-                  </Card>
-                </CarouselItem>
-              </CarouselContent>
-              <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2">
+            <div className="relative">
+              <div className="overflow-hidden" ref={emblaRef}>
+                <div className="flex">
+                  {offers.map((offer, index) => (
+                    <div className="flex-[0_0_100%]" key={index}>
+                      <Card className="bg-gray-800 border-gray-700 mx-2">
+                        <CardContent className="p-4 h-[120px] flex flex-col justify-center">
+                          <h3 className="text-lg font-semibold mb-2">{offer.title}</h3>
+                          {offer.description.map((desc, i) => (
+                            <p key={i} className="text-sm text-gray-400">
+                              {desc}
+                            </p>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-800"
+                onClick={() => scrollTo(selectedIndex - 1)}
+              >
                 <ChevronLeft className="h-4 w-4" />
-              </CarouselPrevious>
-              <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2">
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute right-0 top-1/2 -translate-y-1/2 bg-gray-800"
+                onClick={() => scrollTo(selectedIndex + 1)}
+              >
                 <ChevronRight className="h-4 w-4" />
-              </CarouselNext>
-            </Carousel>
+              </Button>
+            </div>
+            <div className="flex justify-center mt-2">
+              {scrollSnaps.map((_, index) => (
+                <button
+                  key={index}
+                  className={`h-2 w-2 rounded-full mx-1 transition-colors duration-300 ${
+                    index === selectedIndex ? "bg-blue-500" : "bg-gray-500"
+                  }`}
+                  onClick={() => scrollTo(index)}
+                />
+              ))}
+            </div>
 
             <div className="flex justify-between items-center">
               <ServiceFeature icon={<RefreshCcw size={20} />} text="7 Day Replacement" />
